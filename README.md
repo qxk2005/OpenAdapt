@@ -19,6 +19,58 @@ Record GUI demonstrations, train ML models, and evaluate agents - all from a uni
 
 OpenAdapt v1.0+ uses a **modular meta-package architecture**. The main `openadapt` package provides a unified CLI and depends on focused sub-packages via PyPI:
 
+```mermaid
+graph TD
+    subgraph UI["用户与交互界面 (User & Interface)"]
+        CLI["openadapt CLI (元包命令行)"]
+        Scripts["独立运行脚本 (replay_capture.py, run_model.py, train_local.py)"]
+    end
+
+    subgraph Core["核心配置层 (Core & Config)"]
+        OpenAdaptCore["openadapt 元包"]
+        Config["配置管理 (config.py)"]
+    end
+
+    subgraph Modules["模块化功能子包 (Modular Sub-packages)"]
+        Capture["录制引擎 (openadapt-capture)"]
+        ML["机器学习引擎 (openadapt-ml)"]
+        Evals["基准评测 (openadapt-evals)"]
+        Viewer["可视化组件 (openadapt-viewer)"]
+        Grounding["元素定位 (openadapt-grounding)"]
+        Retrieval["多模态检索 (openadapt-retrieval)"]
+        Privacy["数据脱敏 (openadapt-privacy)"]
+    end
+
+    subgraph DataStore["数据存储与外部服务"]
+        DB[("SQLite 数据库<br>(recording.db / capture.db)")]
+        HF["HuggingFace 视觉语言模型<br>(Qwen2-VL / Qwen2.5-VL 等)"]
+        LoRA["LoRA 权重输出<br>(training_output/final)"]
+        ExternalServices["元素定位外部服务<br>(OmniParser / UI-TARS)"]
+    end
+
+    %% 连接关系
+    CLI --> OpenAdaptCore
+    Scripts --> OpenAdaptCore
+    OpenAdaptCore --> Config
+    
+    OpenAdaptCore --> Capture
+    OpenAdaptCore --> ML
+    OpenAdaptCore --> Evals
+    OpenAdaptCore --> Viewer
+    
+    Capture --> DB
+    Viewer --> DB
+    
+    ML --> HF
+    ML -.-> LoRA
+    
+    ML --> Grounding
+    ML --> Retrieval
+    ML --> Privacy
+    
+    Grounding --> ExternalServices
+```
+
 | Package | Description | Repository |
 |---------|-------------|------------|
 | `openadapt` | Meta-package with unified CLI | This repo |
@@ -163,6 +215,33 @@ OpenAdapt follows a streamlined **Demonstrate → Learn → Execute** pipeline:
 - **Ground**: Map intentions to specific UI coordinates with `openadapt-grounding`
 - **Act**: Execute validated actions with safety gates
 - **Evaluate**: Measure success with `openadapt-evals` and feed results back for improvement
+
+```mermaid
+flowchart TD
+    subgraph Phase1["第一阶段: DEMONSTRATE (录制示范)"]
+        A["启动录制: openadapt capture start"] --> B["捕捉屏幕截图 & 输入事件 (鼠标/键盘)"]
+        B --> C["敏感信息脱敏 (openadapt-privacy)"]
+        C --> D["保存至本地 SQLite (recording.db / capture.db)"]
+    end
+
+    subgraph Phase2["第二阶段: LEARN (政策习得/训练)"]
+        D --> E["数据预处理 (ingest & convert to SFT samples)"]
+        E --> F["图像缩放 & 提示词构建 (Goal + Context)"]
+        F --> G["LoRA 监督微调 (openadapt train / train_local.py)"]
+        G --> H["输出微调权重 (training_output/final)"]
+    end
+
+    subgraph Phase3["第三阶段: EXECUTE (智能执行/评测)"]
+        H --> I["加载模型与 LoRA 权重 (run_model.py / eval)"]
+        I --> J["Agent 循环: 获取实时屏幕截图 + Task Goal"]
+        J --> K["VLM 决策预测 (Thought -> Action: CLICK/TYPE/WAIT/DONE)"]
+        K --> L{"Action 是否为 DONE()?"}
+        L -- 否 --> M["通过 pynput 真实执行 GUI 动作"]
+        M --> J
+        L -- 是 --> N["任务执行完成"]
+        N --> O["基准跑分评估成功率 (openadapt-evals)"]
+    end
+```
 
 ### Core Approach: Trajectory-Conditioned Disambiguation
 

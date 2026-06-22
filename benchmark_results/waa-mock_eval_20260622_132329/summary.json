@@ -1,0 +1,44 @@
+{
+  "benchmark_name": "waa-mock",
+  "run_name": "waa-mock_eval_20260622_132329",
+  "model_id": "unknown",
+  "num_tasks": 3,
+  "num_success": 3,
+  "success_rate": 1.0,
+  "avg_score": 1.0,
+  "avg_steps": 1.0,
+  "avg_time_seconds": 0.024594430966923635,
+  "num_infrastructure_failures": 0,
+  "num_tasks_excluding_infra": 3,
+  "num_success_excluding_infra": 3,
+  "success_rate_excluding_infra": 1.0,
+  "tasks": [
+    {
+      "task_id": "mock_chrome_001",
+      "success": true,
+      "score": 1.0,
+      "num_steps": 1,
+      "error": null,
+      "reason": "clicked=['4'], typed=False, done=False",
+      "error_type": null
+    },
+    {
+      "task_id": "mock_clock_001",
+      "success": true,
+      "score": 1.0,
+      "num_steps": 1,
+      "error": null,
+      "reason": "clicked=['4'], typed=False, done=False",
+      "error_type": null
+    },
+    {
+      "task_id": "mock_file_explorer_001",
+      "success": true,
+      "score": 1.0,
+      "num_steps": 1,
+      "error": null,
+      "reason": "clicked=['4'], typed=False, done=False",
+      "error_type": null
+    }
+  ]
+}

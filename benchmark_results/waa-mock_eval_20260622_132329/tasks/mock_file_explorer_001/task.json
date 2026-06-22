@@ -1,0 +1,12 @@
+{
+  "task_id": "mock_file_explorer_001",
+  "instruction": "Mock task 1 in file_explorer domain",
+  "domain": "file_explorer",
+  "initial_state_ref": null,
+  "time_limit_steps": 15,
+  "raw_config": {
+    "mock": true,
+    "synthetic": true
+  },
+  "evaluation_spec": null
+}
