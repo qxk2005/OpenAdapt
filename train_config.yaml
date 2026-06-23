@@ -1,0 +1,52 @@
+# OpenAdapt VL 模型本地训练配置
+# 适用于 Apple Silicon Mac (MPS backend)
+# 
+# 使用方式:
+#   openadapt train start --capture ./my-task --config ./train_config.yaml
+#
+# 注意事项:
+#   - Apple Silicon 不支持 bitsandbytes 4-bit 量化, 所以 load_in_4bit 设为 false
+#   - Unsloth 需要 CUDA, 在 Mac 上会自动回退到标准 transformers
+#   - 推荐使用 2B 参数的模型 (64GB RAM 可以跑全精度 2B)
+
+model:
+  # 推荐模型 (从小到大):
+  # - Qwen/Qwen2.5-VL-2B-Instruct   (2B 参数, ~4GB 显存, 推荐起步)
+  # - Qwen/Qwen2.5-VL-7B-Instruct   (7B 参数, ~14GB 显存, 效果更好)
+  # - Qwen/Qwen3-VL-2B-Instruct     (最新版 2B)
+  name: "Qwen/Qwen3-VL-2B-Instruct"
+  
+  # Apple Silicon 不支持 4-bit 量化 (bitsandbytes 需要 CUDA)
+  # 设为 false 使用全精度/半精度
+  load_in_4bit: false
+
+# LoRA 微调配置 (参数高效微调, 减少内存和时间)
+lora:
+  r: 32                          # 增加 LoRA 秩，提供更精细的坐标记忆能力
+  lora_alpha: 64                 # 2 * lora_r，保证权重稳定性
+  lora_dropout: 0.05             # Dropout 防止过拟合
+  finetune_vision_layers: false  # 是否微调视觉编码器 (一般不需要)
+  target_modules:                # 要微调的模块
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+
+# 训练超参数
+training:
+  num_train_epochs: 40           # 大幅增加训练轮数，确保 Loss 降到 1.0 以下以实现完美复现
+  per_device_train_batch_size: 1 # 批大小 (VL模型通常设1)
+  gradient_accumulation_steps: 1 # 设为 1 可以将参数更新频率提升 4 倍，极大加快拟合速度
+  learning_rate: 2e-4            # 学习率
+  warmup_ratio: 0.0              # 去除热身，在极小数据集上使学习率立刻达到顶峰开始工作
+  lr_scheduler_type: "cosine"    # 学习率调度器
+  weight_decay: 0.01             # 权重衰减
+  max_grad_norm: 1.0             # 梯度裁剪
+  max_seq_length: 2048           # 最大序列长度 (减小可以省内存)
+  logging_steps: 1               # 每步都打印日志
+  save_strategy: "epoch"         # 每个 epoch 保存
+  output_dir: "training_output"  # 输出目录
+
+  # 早停设置
+  early_stop_loss: 0.01          # loss 降到 0.01 以下停止
+  early_stop_patience: 10        # 容忍步数

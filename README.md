@@ -1,347 +1,338 @@
-# OpenAdapt: AI-First Process Automation with Large Multimodal Models (LMMs)
+# OpenAdapt GUI 自动化 — 录制、训练与回放
 
-[![Build Status](https://github.com/OpenAdaptAI/OpenAdapt/actions/workflows/main.yml/badge.svg)](https://github.com/OpenAdaptAI/OpenAdapt/actions/workflows/main.yml)
-[![PyPI version](https://img.shields.io/pypi/v/openadapt.svg)](https://pypi.org/project/openadapt/)
-[![Downloads](https://img.shields.io/pypi/dm/openadapt.svg)](https://pypi.org/project/openadapt/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
-[![Discord](https://img.shields.io/discord/1084481804896374814?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/yF527cQbDG)
+基于 [OpenAdapt](https://github.com/OpenAdaptAI/OpenAdapt) 录制 GUI 操作，使用 VL（Vision-Language）模型进行微调训练，实现操作的 **1:1 精确回放** 或 **模型推理回放**。
 
-**OpenAdapt** is the **open** source software **adapt**er between Large Multimodal Models (LMMs) and traditional desktop and web GUIs.
-
-Record GUI demonstrations, train ML models, and evaluate agents - all from a unified CLI.
-
-[Join us on Discord](https://discord.gg/yF527cQbDG) | [Documentation](https://docs.openadapt.ai) | [OpenAdapt.ai](https://openadapt.ai)
+> **环境**: macOS (Apple Silicon) · Python 3.11+ · pyenv 虚拟环境 `OAT`
 
 ---
 
-## Architecture
+## 📁 项目结构
 
-OpenAdapt v1.0+ uses a **modular meta-package architecture**. The main `openadapt` package provides a unified CLI and depends on focused sub-packages via PyPI:
-
-```mermaid
-graph TD
-    subgraph UI["用户与交互界面 (User & Interface)"]
-        CLI["openadapt CLI (元包命令行)"]
-        Scripts["独立运行脚本 (replay_capture.py, run_model.py, train_local.py)"]
-    end
-
-    subgraph Core["核心配置层 (Core & Config)"]
-        OpenAdaptCore["openadapt 元包"]
-        Config["配置管理 (config.py)"]
-    end
-
-    subgraph Modules["模块化功能子包 (Modular Sub-packages)"]
-        Capture["录制引擎 (openadapt-capture)"]
-        ML["机器学习引擎 (openadapt-ml)"]
-        Evals["基准评测 (openadapt-evals)"]
-        Viewer["可视化组件 (openadapt-viewer)"]
-        Grounding["元素定位 (openadapt-grounding)"]
-        Retrieval["多模态检索 (openadapt-retrieval)"]
-        Privacy["数据脱敏 (openadapt-privacy)"]
-    end
-
-    subgraph DataStore["数据存储与外部服务"]
-        DB[("SQLite 数据库<br>(recording.db / capture.db)")]
-        HF["HuggingFace 视觉语言模型<br>(Qwen2-VL / Qwen2.5-VL 等)"]
-        LoRA["LoRA 权重输出<br>(training_output/final)"]
-        ExternalServices["元素定位外部服务<br>(OmniParser / UI-TARS)"]
-    end
-
-    %% 连接关系
-    CLI --> OpenAdaptCore
-    Scripts --> OpenAdaptCore
-    OpenAdaptCore --> Config
-    
-    OpenAdaptCore --> Capture
-    OpenAdaptCore --> ML
-    OpenAdaptCore --> Evals
-    OpenAdaptCore --> Viewer
-    
-    Capture --> DB
-    Viewer --> DB
-    
-    ML --> HF
-    ML -.-> LoRA
-    
-    ML --> Grounding
-    ML --> Retrieval
-    ML --> Privacy
-    
-    Grounding --> ExternalServices
+```
+.
+├── my-task/                    # 录制数据目录
+│   ├── recording.db            # 原始操作事件数据库（174 个事件）
+│   ├── screenshots/            # 每一步的截图（12 张）
+│   └── oa_recording-*.mp4      # 屏幕录像
+├── train_local.py              # 🎯 本地训练脚本（绕过 CLI 兼容性问题）
+├── train_config.yaml           # 训练超参数配置
+├── training_output/            # 训练产出
+│   ├── checkpoint-*/           # 中间检查点（每 epoch 保存）
+│   └── final/                  # 最终模型（LoRA adapter）
+├── run_model.py                # 🤖 基于训练模型推理回放
+├── replay_capture.py           # 🔄 1:1 精确回放录制操作
+├── extract_demo.py             # 📝 提取操作轨迹为 demo.txt
+└── migrate_recording.py        # 🔧 数据库格式迁移工具
 ```
 
-| Package | Description | Repository |
-|---------|-------------|------------|
-| `openadapt` | Meta-package with unified CLI | This repo |
-| `openadapt-capture` | Event recording and storage | [openadapt-capture](https://github.com/OpenAdaptAI/openadapt-capture) |
-| `openadapt-ml` | ML engine, training, inference | [openadapt-ml](https://github.com/OpenAdaptAI/openadapt-ml) |
-| `openadapt-evals` | Benchmark evaluation | [openadapt-evals](https://github.com/OpenAdaptAI/openadapt-evals) |
-| `openadapt-viewer` | HTML visualization | [openadapt-viewer](https://github.com/OpenAdaptAI/openadapt-viewer) |
-| `openadapt-grounding` | UI element localization | [openadapt-grounding](https://github.com/OpenAdaptAI/openadapt-grounding) |
-| `openadapt-retrieval` | Multimodal demo retrieval | [openadapt-retrieval](https://github.com/OpenAdaptAI/openadapt-retrieval) |
-| `openadapt-privacy` | PII/PHI scrubbing | [openadapt-privacy](https://github.com/OpenAdaptAI/openadapt-privacy) |
-| `openadapt-wright` | Dev automation | [openadapt-wright](https://github.com/OpenAdaptAI/openadapt-wright) |
-| `openadapt-herald` | Social media from git history | [openadapt-herald](https://github.com/OpenAdaptAI/openadapt-herald) |
-| `openadapt-crier` | Telegram approval bot | [openadapt-crier](https://github.com/OpenAdaptAI/openadapt-crier) |
-| `openadapt-consilium` | Multi-model consensus | [openadapt-consilium](https://github.com/OpenAdaptAI/openadapt-consilium) |
-| `openadapt-desktop` | Desktop GUI application | [openadapt-desktop](https://github.com/OpenAdaptAI/openadapt-desktop) |
-| `openadapt-tray` | System tray app | [openadapt-tray](https://github.com/OpenAdaptAI/openadapt-tray) |
-| `openadapt-agent` | Production execution engine | [openadapt-agent](https://github.com/OpenAdaptAI/openadapt-agent) |
-| `openadapt-telemetry` | Error tracking | [openadapt-telemetry](https://github.com/OpenAdaptAI/openadapt-telemetry) |
-
 ---
 
-## Installation
+## 🎬 完整工作流
 
-Install what you need:
+### 1. 录制 GUI 操作
 
-```bash
-pip install openadapt              # Minimal CLI only
-pip install openadapt[capture]     # GUI capture/recording
-pip install openadapt[ml]          # ML training and inference
-pip install openadapt[evals]       # Benchmark evaluation
-pip install openadapt[privacy]     # PII/PHI scrubbing
-pip install openadapt[all]         # Everything
-```
-
-**Requirements:** Python 3.10+
-
----
-
-## Quick Start
-
-### 1. Record a demonstration
+使用 OpenAdapt CLI 录制屏幕操作：
 
 ```bash
+# 开始录制（录制名称为 my-task）
 openadapt capture start --name my-task
-# Perform actions in your GUI, then press Ctrl+C to stop
+
+# 执行你要录制的操作...
+
+# 停止录制
+openadapt capture stop
 ```
 
-### 2. Train a model
+录制产出保存在 `./my-task/` 目录下。
+
+---
+
+### 2. 数据迁移（可选）
+
+如果需要将旧格式 `recording.db` 迁移为新格式 `capture.db`（供 openadapt-ml 训练管线使用）：
 
 ```bash
-openadapt train start --capture my-task --model qwen3vl-2b
+# 预览迁移内容（不修改文件）
+python migrate_recording.py --capture ./my-task --dry-run
+
+# 执行迁移
+python migrate_recording.py --capture ./my-task
 ```
 
-### 3. Evaluate
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--capture, -c` | `./my-task` | 录制数据目录路径 |
+| `--dry-run, -n` | — | 仅预览，不实际创建文件 |
+
+---
+
+### 3. 提取 Demo 轨迹文本
+
+从录制中提取人类可读的操作步骤描述：
 
 ```bash
-openadapt eval run --checkpoint training_output/model.pt --benchmark waa
+# 默认提取到 ./my-task/demo.txt
+python extract_demo.py
+
+# 指定路径
+python extract_demo.py --capture ./my-task --output ./demo.txt
+
+# 覆盖任务描述
+python extract_demo.py --task "打开计算器计算 1+1"
 ```
 
-### 4. View recordings
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--capture, -c` | `./my-task` | 录制数据目录路径 |
+| `--output, -o` | `<capture>/demo.txt` | 输出文件路径 |
+| `--task, -t` | 从 DB 读取 | 覆盖任务描述 |
+
+提取结果可用于 OpenAdapt eval：
+```bash
+openadapt eval run --agent api-openai --demo ./my-task/demo.txt
+```
+
+---
+
+### 4. 训练 VL 模型
+
+使用 `train_local.py` 对 VL 模型进行 LoRA 微调：
 
 ```bash
-openadapt capture view my-task
+# 默认训练（Qwen3-VL-2B, 40 epochs）
+python train_local.py
+
+# 指定模型和轮数
+python train_local.py --model Qwen/Qwen2.5-VL-3B-Instruct --epochs 20
+
+# 预览训练数据（不实际训练）
+python train_local.py --dry-run
+
+# 完整参数示例
+python train_local.py \
+    --capture ./my-task \
+    --model Qwen/Qwen3-VL-2B-Instruct \
+    --output training_output \
+    --epochs 40 \
+    --lr 2e-4 \
+    --batch-size 1 \
+    --lora-r 32
 ```
 
----
+#### 训练参数
 
-## Ecosystem
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--capture, -c` | `./my-task` | 录制数据目录 |
+| `--model, -m` | `Qwen/Qwen3-VL-2B-Instruct` | HuggingFace 模型名 |
+| `--output, -o` | `training_output` | 检查点输出目录 |
+| `--epochs, -e` | `40` | 训练轮数 |
+| `--lr` | `2e-4` | 学习率 |
+| `--batch-size, -b` | `1` | 批大小 |
+| `--lora-r` | `32` | LoRA 秩 |
+| `--4bit` | — | 启用 4-bit 量化（需 CUDA） |
+| `--dry-run, -n` | — | 仅加载数据预览 |
 
-### Core Platform Components
+#### 训练配置文件
 
-| Package | Description | Repository |
-|---------|-------------|------------|
-| `openadapt` | Meta-package with unified CLI | This repo |
-| `openadapt-capture` | Event recording and storage | [openadapt-capture](https://github.com/OpenAdaptAI/openadapt-capture) |
-| `openadapt-ml` | ML engine, training, inference | [openadapt-ml](https://github.com/OpenAdaptAI/openadapt-ml) |
-| `openadapt-evals` | Benchmark evaluation | [openadapt-evals](https://github.com/OpenAdaptAI/openadapt-evals) |
-| `openadapt-viewer` | HTML visualization | [openadapt-viewer](https://github.com/OpenAdaptAI/openadapt-viewer) |
-| `openadapt-grounding` | UI element localization | [openadapt-grounding](https://github.com/OpenAdaptAI/openadapt-grounding) |
-| `openadapt-retrieval` | Multimodal demo retrieval | [openadapt-retrieval](https://github.com/OpenAdaptAI/openadapt-retrieval) |
-| `openadapt-privacy` | PII/PHI scrubbing | [openadapt-privacy](https://github.com/OpenAdaptAI/openadapt-privacy) |
+详细的超参数配置见 [`train_config.yaml`](./train_config.yaml)：
 
-### Applications and Tools
+```yaml
+model:
+  name: "Qwen/Qwen3-VL-2B-Instruct"
+  load_in_4bit: false              # Apple Silicon 不支持
 
-| Package | Description | Repository |
-|---------|-------------|------------|
-| `openadapt-desktop` | Desktop GUI application | [openadapt-desktop](https://github.com/OpenAdaptAI/openadapt-desktop) |
-| `openadapt-tray` | System tray app | [openadapt-tray](https://github.com/OpenAdaptAI/openadapt-tray) |
-| `openadapt-agent` | Production execution engine | [openadapt-agent](https://github.com/OpenAdaptAI/openadapt-agent) |
-| `openadapt-wright` | Dev automation | [openadapt-wright](https://github.com/OpenAdaptAI/openadapt-wright) |
-| `openadapt-herald` | Social media from git history | [openadapt-herald](https://github.com/OpenAdaptAI/openadapt-herald) |
-| `openadapt-crier` | Telegram approval bot | [openadapt-crier](https://github.com/OpenAdaptAI/openadapt-crier) |
-| `openadapt-consilium` | Multi-model consensus | [openadapt-consilium](https://github.com/OpenAdaptAI/openadapt-consilium) |
-| `openadapt-telemetry` | Error tracking | [openadapt-telemetry](https://github.com/OpenAdaptAI/openadapt-telemetry) |
+lora:
+  r: 32                            # LoRA 秩
+  lora_alpha: 64                   # 2 × lora_r
+  lora_dropout: 0.05
+  target_modules: [q_proj, v_proj, k_proj, o_proj]
 
----
-
-## CLI Reference
-
-```
-openadapt capture start --name <name>    Start recording
-openadapt capture stop                    Stop recording
-openadapt capture list                    List captures
-openadapt capture view <name>             Open capture viewer
-
-openadapt train start --capture <name>    Train model on capture
-openadapt train status                    Check training progress
-openadapt train stop                      Stop training
-
-openadapt eval run --checkpoint <path>    Evaluate trained model
-openadapt eval run --agent api-claude     Evaluate API agent
-openadapt eval mock --tasks 10            Run mock evaluation
-
-openadapt serve --port 8080               Start dashboard server
-openadapt version                         Show installed versions
-openadapt doctor                          Check system requirements
+training:
+  num_train_epochs: 40             # 足够让 Loss 降到 1.0 以下
+  learning_rate: 2e-4
+  warmup_ratio: 0.0                # 极小数据集不需要热身
+  gradient_accumulation_steps: 1
+  logging_steps: 1
+  early_stop_loss: 0.01
 ```
 
----
+#### 训练依赖
 
-## How It Works
-
-See the full [Architecture Evolution](docs/architecture-evolution.md) for detailed documentation.
-
-### Three-Phase Pipeline
-
-OpenAdapt follows a streamlined **Demonstrate → Learn → Execute** pipeline:
-
-**1. DEMONSTRATE (Observation Collection)**
-- **Capture**: Record user actions and screenshots with `openadapt-capture`
-- **Privacy**: Scrub PII/PHI from recordings with `openadapt-privacy`
-- **Store**: Build a searchable demonstration library
-
-**2. LEARN (Policy Acquisition)**
-- **Retrieval Path**: Embed demonstrations, index them, and enable semantic search
-- **Training Path**: Load demonstrations and fine-tune Vision-Language Models (VLMs)
-- **Abstraction**: Progress from literal replay to template-based automation
-
-**3. EXECUTE (Agent Deployment)**
-- **Observe**: Take screenshots and gather accessibility information
-- **Policy**: Use demonstration context to decide actions via VLMs (Claude, GPT-4o, Qwen3-VL)
-- **Ground**: Map intentions to specific UI coordinates with `openadapt-grounding`
-- **Act**: Execute validated actions with safety gates
-- **Evaluate**: Measure success with `openadapt-evals` and feed results back for improvement
-
-```mermaid
-flowchart TD
-    subgraph Phase1["第一阶段: DEMONSTRATE (录制示范)"]
-        A["启动录制: openadapt capture start"] --> B["捕捉屏幕截图 & 输入事件 (鼠标/键盘)"]
-        B --> C["敏感信息脱敏 (openadapt-privacy)"]
-        C --> D["保存至本地 SQLite (recording.db / capture.db)"]
-    end
-
-    subgraph Phase2["第二阶段: LEARN (政策习得/训练)"]
-        D --> E["数据预处理 (ingest & convert to SFT samples)"]
-        E --> F["图像缩放 & 提示词构建 (Goal + Context)"]
-        F --> G["LoRA 监督微调 (openadapt train / train_local.py)"]
-        G --> H["输出微调权重 (training_output/final)"]
-    end
-
-    subgraph Phase3["第三阶段: EXECUTE (智能执行/评测)"]
-        H --> I["加载模型与 LoRA 权重 (run_model.py / eval)"]
-        I --> J["Agent 循环: 获取实时屏幕截图 + Task Goal"]
-        J --> K["VLM 决策预测 (Thought -> Action: CLICK/TYPE/WAIT/DONE)"]
-        K --> L{"Action 是否为 DONE()?"}
-        L -- 否 --> M["通过 pynput 真实执行 GUI 动作"]
-        M --> J
-        L -- 是 --> N["任务执行完成"]
-        N --> O["基准跑分评估成功率 (openadapt-evals)"]
-    end
-```
-
-### Core Approach: Trajectory-Conditioned Disambiguation
-
-Zero-shot VLMs fail on GUI tasks not due to lack of capability, but due to **ambiguity in UI affordances**. OpenAdapt resolves this by conditioning agents on human demonstrations — "show, don't tell."
-
-| | No Retrieval | With Retrieval |
-|---|---|---|
-| **No Fine-tuning** | 46.7% (zero-shot baseline) | **100%** first-action (n=45, shared entry point) |
-| **Fine-tuning** | Standard SFT (baseline) | **Demo-conditioned FT** (planned) |
-
-The bottom-right cell is OpenAdapt's unique value: training models to **use** demonstrations they haven't seen before, combining retrieval with fine-tuning for maximum accuracy. Phase 2 (retrieval-only prompting) is validated; Phase 3 (demo-conditioned fine-tuning) is in progress.
-
-**Validated result**: On a controlled macOS benchmark (45 System Settings tasks sharing a common navigation entry point), demo-conditioned prompting improved first-action accuracy from 46.7% to 100%. A length-matched control (+11.1 pp only) confirms the benefit is semantic, not token-length. See the [research thesis](https://github.com/OpenAdaptAI/openadapt-ml/blob/main/docs/research_thesis.md) for methodology and the [publication roadmap](docs/publication-roadmap.md) for limitations.
-
-**Industry validation**: [OpenCUA](https://github.com/xlang-ai/OpenCUA) (NeurIPS 2025 Spotlight, XLANG Lab) [reused OpenAdapt's macOS accessibility capture code](https://arxiv.org/html/2508.09123v3) in their AgentNetTool, but uses demos only for model training — not runtime conditioning. No open-source CUA framework currently does demo-conditioned inference, which remains OpenAdapt's architectural differentiator.
-
-### Key Concepts
-
-- **Policy/Grounding Separation**: The Policy decides *what* to do; Grounding determines *where* to do it
-- **Safety Gate**: Runtime validation layer before action execution (confirm mode for high-risk actions)
-- **Abstraction Ladder**: Progressive generalization from literal replay to goal-level automation
-- **Evaluation-Driven Feedback**: Success traces become new training data
-
----
-
-## Terminology
-
-| Term | Description |
-|------|-------------|
-| **Observation** | What the agent perceives (screenshot, accessibility tree) |
-| **Action** | What the agent does (click, type, scroll, etc.) |
-| **Trajectory** | Sequence of observation-action pairs |
-| **Demonstration** | Human-provided example trajectory |
-| **Policy** | Decision-making component that maps observations to actions |
-| **Grounding** | Mapping intent to specific UI elements (coordinates) |
-
----
-
-## Demos
-
-**Legacy Version (v0.46.0) Examples:**
-- [Twitter Demo](https://twitter.com/abrichr/status/1784307190062342237) - Early OpenAdapt demonstration
-- [Loom Video](https://www.loom.com/share/9d77eb7028f34f7f87c6661fb758d1c0) - Process automation walkthrough
-
-*Note: These demos show the legacy monolithic version. For current v1.0+ modular architecture examples, see the [documentation](https://docs.openadapt.ai).*
-
----
-
-## Permissions
-
-**macOS:** Grant Accessibility, Screen Recording, and Input Monitoring permissions to your terminal. See [permissions guide](./legacy/permissions_in_macOS.md).
-
-**Windows:** Run as Administrator if needed for input capture.
-
----
-
-## Legacy Version
-
-The monolithic OpenAdapt codebase (v0.46.0) is preserved in the `legacy/` directory.
-
-**To use the legacy version:**
 ```bash
-pip install openadapt==0.46.0
+pip install trl datasets peft accelerate
 ```
 
-See [docs/LEGACY_FREEZE.md](docs/LEGACY_FREEZE.md) for migration guide and details.
+#### 训练产出
+
+- `training_output/checkpoint-*/` — 每个 epoch 的中间检查点
+- `training_output/final/` — 最终合并的 LoRA adapter
 
 ---
 
-## Contributing
+### 5. 1:1 精确回放（replay_capture.py）
 
-1. [Join Discord](https://discord.gg/yF527cQbDG)
-2. Pick an issue from the relevant sub-package repository
-3. Submit a PR
+直接回放 `recording.db` 中的原始事件，**完全精确还原**录制操作的坐标和时间间隔：
 
-For sub-package development:
 ```bash
-git clone https://github.com/OpenAdaptAI/openadapt-ml  # or other sub-package
-cd openadapt-ml
-pip install -e ".[dev]"
+# 1:1 原速回放（默认 3 秒倒计时）
+python replay_capture.py
+
+# 指定录制目录
+python replay_capture.py --capture ./my-task
+
+# 2 倍速回放
+python replay_capture.py --speed 2.0
+
+# 慢速回放（0.5 倍速）
+python replay_capture.py --speed 0.5
+
+# 预览所有事件（不执行）
+python replay_capture.py --dry-run
+
+# 增加准备时间（10 秒倒计时）
+python replay_capture.py --delay 10
+
+# 组合使用
+python replay_capture.py --capture ./my-task --speed 1.0 --delay 5
+```
+
+#### 回放参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--capture, -c` | `./my-task` | 录制数据目录 |
+| `--speed, -s` | `1.0` | 回放速度倍率（2.0 = 两倍速） |
+| `--delay, -d` | `3.0` | 开始前的倒计时秒数 |
+| `--dry-run, -n` | — | 仅打印事件，不执行 |
+
+#### 注意事项
+
+- ⚠️ **需要辅助功能权限**：系统设置 → 隐私与安全 → 辅助功能 → 启用终端/iTerm2
+- ⚠️ **屏幕分辨率需一致**：录制的坐标是绝对像素值，分辨率变化会导致点击偏移
+- ⚠️ **倒计时期间切换到目标窗口**
+- 按 `Ctrl+C` 可随时中断回放
+
+#### 回放依赖
+
+```bash
+pip install pynput
 ```
 
 ---
 
-## Related Projects
+### 6. 模型推理回放（run_model.py）
 
-- [OpenAdaptAI/SoM](https://github.com/OpenAdaptAI/SoM) - Set-of-Mark prompting
-- [OpenAdaptAI/pynput](https://github.com/OpenAdaptAI/pynput) - Input monitoring fork
-- [OpenAdaptAI/atomacos](https://github.com/OpenAdaptAI/atomacos) - macOS accessibility
+加载训练好的 LoRA 模型，通过截图推理预测下一步操作并执行：
+
+```bash
+# 默认运行（加载 training_output/final）
+python run_model.py
+
+# 指定检查点和任务
+python run_model.py --checkpoint training_output/final --task my-task
+
+# 增加最大步数
+python run_model.py --max-steps 20
+
+# 延长准备时间
+python run_model.py --delay 10
+
+# 调整操作间隔
+python run_model.py --action-delay 2.0
+
+# 预览模式（不执行操作）
+python run_model.py --dry-run
+
+# 完整参数示例
+python run_model.py \
+    --checkpoint training_output/final \
+    --task my-task \
+    --max-steps 15 \
+    --delay 5 \
+    --action-delay 1.0
+```
+
+#### 推理参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--checkpoint, -c` | `training_output/final` | LoRA 检查点路径 |
+| `--task, -t` | `my-task` | 任务描述/目标 |
+| `--max-steps, -s` | `15` | 最大推理步数 |
+| `--delay, -d` | `5.0` | 开始前的倒计时秒数 |
+| `--action-delay` | `1.0` | 每步操作后的等待时间（秒） |
+| `--dry-run, -n` | — | 仅预测不执行 |
+
+#### 推理流程
+
+```
+截图 → 模型推理 → 解析动作 → 执行操作 → 等待 → 循环
+         ↓
+   支持的动作类型:
+   - CLICK(x=0.XX, y=0.XX)   点击归一化坐标
+   - TYPE(text="...")         输入文本
+   - WAIT()                  等待 UI 更新
+   - DONE()                  任务完成
+```
+
+#### 推理依赖
+
+```bash
+pip install pynput Pillow peft transformers torch
+```
 
 ---
 
-## Support
+## 📊 两种回放方式对比
 
-- **Discord:** https://discord.gg/yF527cQbDG
-- **Issues:** Use the relevant sub-package repository
-- **Architecture docs:** [GitHub Wiki](https://github.com/OpenAdaptAI/OpenAdapt/wiki/OpenAdapt-Architecture-(draft))
+| 特性 | 1:1 精确回放 | 模型推理回放 |
+|------|-------------|-------------|
+| **脚本** | `replay_capture.py` | `run_model.py` |
+| **数据源** | `recording.db` 原始事件 | 训练好的 LoRA 模型 |
+| **精确度** | ✅ 100% 精确（坐标+时间） | ⚠️ 近似（模型预测） |
+| **泛化能力** | ❌ 无（固定坐标回放） | ✅ 有（可适应 UI 变化） |
+| **需要 GPU** | ❌ | ⚠️ 推荐（MPS/CUDA） |
+| **适用场景** | 固定环境的精确重复 | 不同环境的智能操作 |
 
 ---
 
-## License
+## 🔧 环境配置
 
-MIT License - see [LICENSE](LICENSE) for details.
+### 使用 pyenv 虚拟环境
+
+```bash
+# 激活 OAT 环境
+pyenv activate OAT
+
+# 安装全部依赖
+pip install pynput Pillow peft transformers torch trl datasets accelerate
+```
+
+### macOS 权限设置
+
+回放功能需要 **辅助功能权限**：
+
+1. 打开 **系统设置** → **隐私与安全** → **辅助功能**
+2. 点击 `+` 号，添加你使用的终端应用（Terminal / iTerm2 / Warp 等）
+3. 确保开关已打开
+
+---
+
+## 🚀 快速上手
+
+```bash
+# 1. 录制操作
+openadapt capture start --name my-task
+# ... 执行操作 ...
+openadapt capture stop
+
+# 2. 训练模型
+python train_local.py --capture ./my-task --epochs 40
+
+# 3a. 1:1 精确回放
+python replay_capture.py --capture ./my-task
+
+# 3b. 或者，基于模型推理回放
+python run_model.py --checkpoint training_output/final --task my-task
+```

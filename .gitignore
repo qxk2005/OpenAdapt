@@ -1,58 +1,39 @@
-# Envirionment
-.env
-config.json
-data
+# Upstream OpenAdapt source (separate git repo)
+OpenAdapt/
+
+# Training output (6GB+ of model checkpoints)
+training_output/
+
+# Recording data (large screenshots and video)
+my-task/screenshots/
+my-task/*.mp4
 
 # Python
-__pycache__
-.cache
-*.egg-info
-*~
-.venv
-
-# Vim
-*.sw[m-p]
-
-# db
-*.db
-*.db-journal
-
-# VSCode
-.VSCode
-.vsCode
-
-# Idea
-.idea
-
-# Generated performance charts
-performance
-
-# Generated when adding editable dependencies in requirements.txt (-e)
-src
-
-# MacOS file
-.DS_Store
-
-*.pyc
-*.pt
-
+__pycache__/
+*.py[cod]
+*.egg-info/
 dist/
 build/
+*.egg
+.eggs/
 
-OpenAdapt.spec
-build_scripts/OpenAdapt.iss
+# Virtual environments
+.venv/
+venv/
+env/
 
-# Temporary files
-install.sh
-*.txt
-output.png
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-# Legacy untracked directories (not part of repo)
-omnimcp/
-omnimcp.bak/
-performance/
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
 
-# Secrets (should never be committed)
-*.pem
-.env.backup
-deploy/.env
+# Byte-compiled
+*.pyc
+*.pyo
